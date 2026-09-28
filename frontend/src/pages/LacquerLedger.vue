@@ -6,13 +6,16 @@ import LayerStack from '../components/common/LayerStack.vue';
 import EmptyPanel from '../components/common/EmptyPanel.vue';
 import { useLacquerStore } from '../stores/lacquerStore';
 import { useBoardStore } from '../stores/boardStore';
+import { useJoinStore } from '../stores/joinStore';
 import { averageThickness, curingInRange, formatDate, layersToTarget, TARGET_TOTAL_MM } from '../utils/layer';
+import { joinStatus } from '../utils/join';
 import { MIX_RATIOS, type LacquerLayer } from '../types/lacquer-layer';
 
 const lacquerStore = useLacquerStore();
 const boardStore = useBoardStore();
+const joinStore = useJoinStore();
 
-const guqinOptions = computed(() => Array.from(new Set([...boardStore.guqinNos, ...lacquerStore.guqinNos])).sort());
+const guqinOptions = computed(() => Array.from(new Set([...boardStore.guqinNos, ...joinStore.guqinNos, ...lacquerStore.guqinNos])).sort());
 const selectedGuqin = ref(guqinOptions.value[0] ?? '');
 watch(guqinOptions, (list) => {
   if (!selectedGuqin.value && list.length) {
@@ -23,6 +26,10 @@ watch(guqinOptions, (list) => {
 const layers = computed(() => (selectedGuqin.value ? lacquerStore.layersOf(selectedGuqin.value) : []));
 const total = computed(() => (selectedGuqin.value ? lacquerStore.totalOf(selectedGuqin.value) : 0));
 const abnormal = computed(() => layers.value.filter((layer) => !curingInRange(layer.curingTemp, layer.curingHumidity)).length);
+
+/** 合琴放行状态：湿压养护未满 3 天或未合琴时，不得开始髹漆 */
+const join = computed(() => (selectedGuqin.value ? joinStore.byGuqin(selectedGuqin.value) : undefined));
+const joinGate = computed(() => joinStatus(join.value));
 
 const dialogVisible = ref(false);
 const editingId = ref('');
@@ -58,6 +65,10 @@ const rules: FormRules = {
 };
 
 function openAppend() {
+  if (!joinGate.value.readyForLacquer) {
+    ElMessage.warning(join.value ? `合琴尚未放行：${joinGate.value.label}` : `${selectedGuqin.value} 尚未登记合琴记录，不能开始髹漆`);
+    return;
+  }
   editingId.value = '';
   form.value = {
     guqinNo: selectedGuqin.value || guqinOptions.value[0] || 'Q-2501',
@@ -92,6 +103,15 @@ function openEdit(layer: LacquerLayer) {
 async function submit() {
   const ok = await formRef.value?.validate().catch(() => false);
   if (!ok) return;
+  // 追加新遍次前校验合琴养护（编辑旧记录不拦截，以便订正台账）
+  if (!editingId.value) {
+    const targetJoin = joinStore.byGuqin(form.value.guqinNo);
+    const targetGate = joinStatus(targetJoin);
+    if (!targetGate.readyForLacquer) {
+      ElMessage.error(targetJoin ? `合琴尚未放行：${targetGate.label}` : `${form.value.guqinNo} 尚未登记合琴记录，不能开始髹漆`);
+      return;
+    }
+  }
   const payload = {
     guqinNo: form.value.guqinNo,
     mixRatio: form.value.mixRatio,
@@ -127,15 +147,25 @@ async function remove(layer: LacquerLayer) {
 <template>
   <div>
     <h2 class="page-title">灰胎髹漆遍次台账</h2>
-    <p class="page-desc">按遍次累加灰胎厚度，记录荫房温湿度与打磨目数；工艺窗口为 20~30℃ / 70~85%。</p>
+    <p class="page-desc">按遍次累加灰胎厚度，记录荫房温湿度与打磨目数；工艺窗口为 20~30℃ / 70~85%。湿压合琴须养护满 3 天才能开始髹漆。</p>
 
     <div class="toolbar">
-      <el-button type="primary" @click="openAppend">追加髹漆遍次</el-button>
+      <el-button type="primary" :disabled="!joinGate.readyForLacquer" @click="openAppend">追加髹漆遍次</el-button>
       <el-select v-model="selectedGuqin" placeholder="选择琴号" style="width: 180px">
         <el-option v-for="no in guqinOptions" :key="no" :label="no" :value="no" />
       </el-select>
       <el-tag type="warning" effect="plain">髹漆目标累计 {{ TARGET_TOTAL_MM }}mm</el-tag>
     </div>
+
+    <el-alert
+      v-if="!joinGate.readyForLacquer"
+      class="gate-alert"
+      type="warning"
+      show-icon
+      :closable="false"
+      :title="join ? `${selectedGuqin} 合琴尚未放行，暂不能髹漆` : `${selectedGuqin || '该琴'} 尚未登记合琴记录，不能开始髹漆`"
+      :description="joinGate.label"
+    />
 
     <el-row :gutter="12" class="stat-row">
       <el-col :xs="12" :md="6">
@@ -260,6 +290,10 @@ async function remove(layer: LacquerLayer) {
 }
 .stat-row .el-col {
   margin-bottom: 12px;
+}
+.gate-alert {
+  margin-bottom: 12px;
+  border-radius: 8px;
 }
 .block {
   margin-bottom: 16px;

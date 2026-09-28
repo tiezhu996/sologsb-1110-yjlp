@@ -1,6 +1,7 @@
 import { db } from './db';
 import type { WoodBoard } from '../types/wood-board';
 import type { SoundChamber } from '../types/sound-chamber';
+import type { JoinRecord } from '../types/join';
 import type { LacquerLayer } from '../types/lacquer-layer';
 import type { Stringing } from '../types/stringing';
 import { cumulativeThickness } from './layer';
@@ -20,6 +21,8 @@ export const SEED_BOARDS: WoodBoard[] = [
   { id: 'board-008', boardNo: 'MB-2508', guqinNo: 'Q-2504', part: '底板', species: '梓木', dryYears: 9, thicknessMm: 19, grain: '直纹', defect: '无', receivedAt: daysAgo(78) },
   { id: 'board-009', boardNo: 'MB-2509', guqinNo: 'Q-2505', part: '面板', species: '桐木', dryYears: 2, thicknessMm: 29, grain: '直纹', defect: '裂纹', receivedAt: daysAgo(30), remark: '阴干不足且有裂纹，待退料' },
   { id: 'board-010', boardNo: 'MB-2510', guqinNo: 'Q-2505', part: '底板', species: '梓木', dryYears: 4, thicknessMm: 17, grain: '直纹', defect: '无', receivedAt: daysAgo(28) },
+  { id: 'board-011', boardNo: 'MB-2511', guqinNo: 'Q-2506', part: '面板', species: '杉木', dryYears: 6, thicknessMm: 30, grain: '直纹', defect: '无', receivedAt: daysAgo(40) },
+  { id: 'board-012', boardNo: 'MB-2512', guqinNo: 'Q-2506', part: '底板', species: '梓木', dryYears: 6, thicknessMm: 18, grain: '直纹', defect: '无', receivedAt: daysAgo(39) },
 ];
 
 export const SEED_CHAMBERS: SoundChamber[] = [
@@ -27,6 +30,76 @@ export const SEED_CHAMBERS: SoundChamber[] = [
   { id: 'chamber-002', guqinNo: 'Q-2502', nayinThickness: 14, longchiThickness: 12, fengzhaoThickness: 13, chamberDepth: 28, postPos: '天柱偏左', poolSize: '210×24', carvedAt: daysAgo(76), carver: '周砚秋' },
   { id: 'chamber-003', guqinNo: 'Q-2503', nayinThickness: 15, longchiThickness: 13, fengzhaoThickness: 14, chamberDepth: 25, postPos: '天柱偏右', poolSize: '195×21', carvedAt: daysAgo(60), carver: '林听雪' },
   { id: 'chamber-004', guqinNo: 'Q-2504', nayinThickness: 17, longchiThickness: 15, fengzhaoThickness: 16, chamberDepth: 24, postPos: '天柱中', poolSize: '215×25', carvedAt: daysAgo(44), carver: '林听雪', remark: '老料槽腹留厚' },
+  { id: 'chamber-005', guqinNo: 'Q-2506', nayinThickness: 15, longchiThickness: 13, fengzhaoThickness: 14, chamberDepth: 26, postPos: '天柱中', poolSize: '200×22', carvedAt: daysAgo(4), carver: '周砚秋' },
+];
+
+/**
+ * 合琴示例：
+ * Q-2501/Q-2502 湿压养护已满；Q-2503 初压后复查离缝、重压返工后重新计满养护（旧记录保留）；
+ * Q-2504 干压当天可继续；Q-2506 刚湿压 1 天，养护未满，进度停在合琴。
+ */
+export const SEED_JOINS: JoinRecord[] = [
+  {
+    id: 'join-001',
+    guqinNo: 'Q-2501',
+    joinedAt: daysAgo(75),
+    pressMethod: '湿压',
+    operator: '周砚秋',
+    compacted: true,
+    noGap: true,
+    reworks: [],
+  },
+  {
+    id: 'join-002',
+    guqinNo: 'Q-2502',
+    joinedAt: daysAgo(66),
+    pressMethod: '湿压',
+    operator: '林听雪',
+    compacted: true,
+    noGap: true,
+    reworks: [],
+  },
+  {
+    id: 'join-003',
+    guqinNo: 'Q-2503',
+    joinedAt: daysAgo(55),
+    pressMethod: '湿压',
+    operator: '周砚秋',
+    compacted: true,
+    noGap: true,
+    remark: '首遍贴合',
+    reworks: [
+      {
+        id: 'rework-001',
+        reason: '复查发现龙池左侧离缝约 0.3mm',
+        pressMethod: '湿压',
+        repressedAt: daysAgo(52),
+        operator: '周砚秋',
+        remark: '重新加压并校平，养护自重压日重算',
+      },
+    ],
+  },
+  {
+    id: 'join-004',
+    guqinNo: 'Q-2504',
+    joinedAt: daysAgo(40),
+    pressMethod: '干压',
+    operator: '林听雪',
+    compacted: true,
+    noGap: true,
+    reworks: [],
+  },
+  {
+    id: 'join-005',
+    guqinNo: 'Q-2506',
+    joinedAt: daysAgo(1),
+    pressMethod: '湿压',
+    operator: '周砚秋',
+    compacted: true,
+    noGap: true,
+    remark: '带压养护中，未满 3 天不得髹漆',
+    reworks: [],
+  },
 ];
 
 function buildSeedLayers(): LacquerLayer[] {
@@ -136,17 +209,19 @@ export async function seedIfEmpty(): Promise<void> {
   if (flag) {
     return;
   }
-  const [boardCount, chamberCount, lacquerCount, stringingCount] = await Promise.all([
+  const [boardCount, chamberCount, joinCount, lacquerCount, stringingCount] = await Promise.all([
     db.boards.count(),
     db.chambers.count(),
+    db.joins.count(),
     db.lacquers.count(),
     db.stringings.count(),
   ]);
   const layers = withCumulative(buildSeedLayers());
 
-  await db.transaction('rw', db.boards, db.chambers, db.lacquers, db.stringings, db.meta, async () => {
+  await db.transaction('rw', [db.boards, db.chambers, db.joins, db.lacquers, db.stringings, db.meta], async () => {
     if (boardCount === 0) await db.boards.bulkPut(SEED_BOARDS);
     if (chamberCount === 0) await db.chambers.bulkPut(SEED_CHAMBERS);
+    if (joinCount === 0) await db.joins.bulkPut(SEED_JOINS);
     if (lacquerCount === 0) await db.lacquers.bulkPut(layers);
     if (stringingCount === 0) await db.stringings.bulkPut(SEED_STRINGINGS);
     await db.meta.put({ key: 'seeded', value: new Date().toISOString() });

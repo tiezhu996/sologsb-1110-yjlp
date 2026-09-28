@@ -2,7 +2,7 @@ import { computed, type ComputedRef } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { WoodBoard, WoodSpecies } from '../types/wood-board';
 
-export type StageKey = 'select' | 'carve' | 'lacquer' | 'string';
+export type StageKey = 'select' | 'carve' | 'join' | 'lacquer' | 'string';
 
 export interface GuqinFilterApi {
   keyword: ComputedRef<string>;

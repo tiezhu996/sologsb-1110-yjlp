@@ -1,6 +1,7 @@
 import Dexie, { type Table } from 'dexie';
 import type { WoodBoard } from '../types/wood-board';
 import type { SoundChamber } from '../types/sound-chamber';
+import type { JoinRecord } from '../types/join';
 import type { LacquerLayer } from '../types/lacquer-layer';
 import type { Stringing } from '../types/stringing';
 
@@ -8,11 +9,12 @@ import type { Stringing } from '../types/stringing';
 export const DB_NAME = 'gbguqin-db';
 
 /** 当前 schema 版本，与 db.version(n) 对应 */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 class GuqinDB extends Dexie {
   boards!: Table<WoodBoard, string>;
   chambers!: Table<SoundChamber, string>;
+  joins!: Table<JoinRecord, string>;
   lacquers!: Table<LacquerLayer, string>;
   stringings!: Table<Stringing, string>;
   meta!: Table<{ key: string; value: string }, string>;
@@ -49,6 +51,17 @@ class GuqinDB extends Dexie {
             }
           });
       });
+
+    // v3：新增合琴记录表（合琴日期 / 压合方式 / 操作人 / 压实与离缝复核 / 返工留档）。
+    // 升级前请在顶栏「导出备份」导出 JSON。
+    this.version(3).stores({
+      boards: 'id, boardNo, guqinNo, part, species, grain, receivedAt',
+      chambers: 'id, guqinNo, postPos, carvedAt',
+      joins: 'id, guqinNo, pressMethod, joinedAt',
+      lacquers: 'id, guqinNo, seq, [guqinNo+seq], appliedAt',
+      stringings: 'id, guqinNo, stringType, strungAt',
+      meta: 'key',
+    });
   }
 }
 

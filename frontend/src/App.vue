@@ -7,12 +7,14 @@ import { seedIfEmpty } from './utils/seed';
 import { downloadText, exportBackupJson } from './utils/export';
 import { useBoardStore } from './stores/boardStore';
 import { useChamberStore } from './stores/chamberStore';
+import { useJoinStore } from './stores/joinStore';
 import { useLacquerStore } from './stores/lacquerStore';
 import { useStringingStore } from './stores/stringingStore';
 
 const route = useRoute();
 const boardStore = useBoardStore();
 const chamberStore = useChamberStore();
+const joinStore = useJoinStore();
 const lacquerStore = useLacquerStore();
 const stringingStore = useStringingStore();
 const ready = ref(false);
@@ -20,7 +22,7 @@ const ready = ref(false);
 onMounted(async () => {
   try {
     await seedIfEmpty();
-    await Promise.all([boardStore.hydrate(), chamberStore.hydrate(), lacquerStore.hydrate(), stringingStore.hydrate()]);
+    await Promise.all([boardStore.hydrate(), chamberStore.hydrate(), joinStore.hydrate(), lacquerStore.hydrate(), stringingStore.hydrate()]);
   } catch (error) {
     ElMessage.error(`本地数据装载失败：${(error as Error).message}`);
   } finally {
@@ -46,6 +48,7 @@ async function handleExport() {
         <el-menu-item index="/">琴坯进度</el-menu-item>
         <el-menu-item index="/boards">板材登记</el-menu-item>
         <el-menu-item index="/chambers">槽腹尺寸</el-menu-item>
+        <el-menu-item index="/joins">合琴记录</el-menu-item>
         <el-menu-item index="/lacquer">灰胎髹漆</el-menu-item>
         <el-menu-item index="/stringing">上弦评价</el-menu-item>
       </el-menu>
