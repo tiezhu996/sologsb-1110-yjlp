@@ -7,6 +7,7 @@ import FilterBar from '../components/common/FilterBar.vue';
 import { useStageProgress, STAGE_LABELS, type StageKey } from '../hooks/useStageProgress';
 import { useBoardStore } from '../stores/boardStore';
 import { useChamberStore } from '../stores/chamberStore';
+import { useAssemblyStore } from '../stores/assemblyStore';
 import { useLacquerStore } from '../stores/lacquerStore';
 import { useStringingStore } from '../stores/stringingStore';
 import { formatDate } from '../utils/layer';
@@ -16,6 +17,7 @@ import type { TimelineEvent } from '../types/ui';
 const route = useRoute();
 const boardStore = useBoardStore();
 const chamberStore = useChamberStore();
+const assemblyStore = useAssemblyStore();
 const lacquerStore = useLacquerStore();
 const stringingStore = useStringingStore();
 const { progressList, summary } = useStageProgress();
@@ -54,6 +56,16 @@ const events = computed<TimelineEvent[]>(() => {
       type: 'primary',
     });
   });
+  assemblyStore.records.forEach((record) => {
+    const status = assemblyStore.statusOf(record.guqinNo);
+    const isLatest = status?.record.id === record.id;
+    list.push({
+      label: `${record.kind === '初合' ? '合琴' : '重压返工'} · ${record.guqinNo}`,
+      at: formatDate(record.joinedAt),
+      text: `${record.pressMethod}，操作人 ${record.operator}${record.reworkReason ? `，返工原因：${record.reworkReason}` : ''}${isLatest ? `；${status?.reason ?? ''}` : ''}`,
+      type: record.kind === '重压' ? 'danger' : 'primary',
+    });
+  });
   lacquerStore.layers.forEach((layer) => {
     list.push({
       label: `髹漆第 ${layer.seq} 遍 · ${layer.guqinNo}`,
@@ -78,8 +90,8 @@ const events = computed<TimelineEvent[]>(() => {
   <div>
     <h2 class="page-title">琴坯进度</h2>
     <p class="page-desc">
-      按选材 / 掏膛 / 灰胎 / 上弦四阶段统计在制琴坯；音色只用文字评语记录，不做音频文件与波形处理。数据保存在浏览器
-      IndexedDB（gbguqin-db）。
+      按选材 / 掏膛 / 合琴 / 灰胎 / 上弦五阶段统计在制琴坯；湿压合琴养护满 3 天后才放行灰胎，重压返工后重新计养护。
+      音色只用文字评语记录，不做音频文件与波形处理。数据保存在浏览器 IndexedDB（gbguqin-db）。
     </p>
 
     <el-row :gutter="12" class="stat-row">
@@ -87,7 +99,7 @@ const events = computed<TimelineEvent[]>(() => {
         <StatBadge label="在制琴坯" :value="progressList.length" unit="张" />
       </el-col>
       <el-col :xs="12" :md="6">
-        <StatBadge label="四阶段完成" :value="summary.completed" unit="张" status="success" />
+        <StatBadge label="五阶段完成" :value="summary.completed" unit="张" status="success" />
       </el-col>
       <el-col :xs="12" :md="6">
         <StatBadge label="平均推进比" :value="summary.averageRatio" unit="%" status="warning" />
@@ -101,11 +113,11 @@ const events = computed<TimelineEvent[]>(() => {
       <template #header>
         <div class="card-head">
           <span>阶段统计（已完成琴坯数）</span>
-          <span class="card-note">板材 {{ boardStore.boards.length }} 块（可用 {{ boardStore.usableCount }} 块）· 髹漆 {{ lacquerStore.layers.length }} 遍 · 荫房异常 {{ lacquerStore.outOfRangeCount }} 遍</span>
+          <span class="card-note">板材 {{ boardStore.boards.length }} 块（可用 {{ boardStore.usableCount }} 块）· 合琴 {{ assemblyStore.records.length }} 条 · 髹漆 {{ lacquerStore.layers.length }} 遍 · 荫房异常 {{ lacquerStore.outOfRangeCount }} 遍</span>
         </div>
       </template>
       <el-row :gutter="12">
-        <el-col v-for="badge in stageBadges" :key="badge.key" :xs="12" :md="6">
+        <el-col v-for="badge in stageBadges" :key="badge.key" :xs="12" :sm="8" :md="8" :lg="4">
           <StatBadge :label="`${badge.label} 完成`" :value="badge.count" unit="张" />
         </el-col>
       </el-row>
@@ -120,7 +132,7 @@ const events = computed<TimelineEvent[]>(() => {
       </template>
       <FilterBar
         :fields="[
-          { key: 'stage', label: '工序阶段', options: ['选材', '掏膛', '灰胎', '上弦'], width: 120 },
+          { key: 'stage', label: '工序阶段', options: ['选材', '掏膛', '合琴', '灰胎', '上弦'], width: 120 },
           { key: 'species', label: '树种', options: WOOD_SPECIES, width: 110 },
         ]"
         keyword-placeholder="搜索琴号（本页按阶段/树种筛选）"

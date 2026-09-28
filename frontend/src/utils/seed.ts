@@ -3,6 +3,7 @@ import type { WoodBoard } from '../types/wood-board';
 import type { SoundChamber } from '../types/sound-chamber';
 import type { LacquerLayer } from '../types/lacquer-layer';
 import type { Stringing } from '../types/stringing';
+import type { AssemblyRecord } from '../types/assembly';
 import { cumulativeThickness } from './layer';
 
 const DAY = 86_400_000;
@@ -27,6 +28,14 @@ export const SEED_CHAMBERS: SoundChamber[] = [
   { id: 'chamber-002', guqinNo: 'Q-2502', nayinThickness: 14, longchiThickness: 12, fengzhaoThickness: 13, chamberDepth: 28, postPos: '天柱偏左', poolSize: '210×24', carvedAt: daysAgo(76), carver: '周砚秋' },
   { id: 'chamber-003', guqinNo: 'Q-2503', nayinThickness: 15, longchiThickness: 13, fengzhaoThickness: 14, chamberDepth: 25, postPos: '天柱偏右', poolSize: '195×21', carvedAt: daysAgo(60), carver: '林听雪' },
   { id: 'chamber-004', guqinNo: 'Q-2504', nayinThickness: 17, longchiThickness: 15, fengzhaoThickness: 16, chamberDepth: 24, postPos: '天柱中', poolSize: '215×25', carvedAt: daysAgo(44), carver: '林听雪', remark: '老料槽腹留厚' },
+];
+
+export const SEED_ASSEMBLIES: AssemblyRecord[] = [
+  { id: 'assembly-001', guqinNo: 'Q-2501', seq: 1, kind: '初合', joinedAt: daysAgo(75), pressMethod: '湿压', operator: '周砚秋' },
+  { id: 'assembly-002', guqinNo: 'Q-2502', seq: 1, kind: '初合', joinedAt: daysAgo(65), pressMethod: '干压', operator: '周砚秋' },
+  { id: 'assembly-003', guqinNo: 'Q-2503', seq: 1, kind: '初合', joinedAt: daysAgo(55), pressMethod: '湿压', operator: '林听雪' },
+  { id: 'assembly-004', guqinNo: 'Q-2503', seq: 2, kind: '重压', joinedAt: daysAgo(50), pressMethod: '湿压', operator: '周砚秋', reworkReason: '复查发现龙池内侧面底板轻微离缝' },
+  { id: 'assembly-005', guqinNo: 'Q-2504', seq: 1, kind: '初合', joinedAt: daysAgo(40), pressMethod: '湿压', operator: '林听雪' },
 ];
 
 function buildSeedLayers(): LacquerLayer[] {
@@ -136,17 +145,19 @@ export async function seedIfEmpty(): Promise<void> {
   if (flag) {
     return;
   }
-  const [boardCount, chamberCount, lacquerCount, stringingCount] = await Promise.all([
+  const [boardCount, chamberCount, assemblyCount, lacquerCount, stringingCount] = await Promise.all([
     db.boards.count(),
     db.chambers.count(),
+    db.assemblies.count(),
     db.lacquers.count(),
     db.stringings.count(),
   ]);
   const layers = withCumulative(buildSeedLayers());
 
-  await db.transaction('rw', db.boards, db.chambers, db.lacquers, db.stringings, db.meta, async () => {
+  await db.transaction('rw', [db.boards, db.chambers, db.assemblies, db.lacquers, db.stringings, db.meta], async () => {
     if (boardCount === 0) await db.boards.bulkPut(SEED_BOARDS);
     if (chamberCount === 0) await db.chambers.bulkPut(SEED_CHAMBERS);
+    if (assemblyCount === 0) await db.assemblies.bulkPut(SEED_ASSEMBLIES);
     if (lacquerCount === 0) await db.lacquers.bulkPut(layers);
     if (stringingCount === 0) await db.stringings.bulkPut(SEED_STRINGINGS);
     await db.meta.put({ key: 'seeded', value: new Date().toISOString() });

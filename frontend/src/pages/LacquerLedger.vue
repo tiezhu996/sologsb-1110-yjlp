@@ -6,6 +6,7 @@ import LayerStack from '../components/common/LayerStack.vue';
 import EmptyPanel from '../components/common/EmptyPanel.vue';
 import { useLacquerStore } from '../stores/lacquerStore';
 import { useBoardStore } from '../stores/boardStore';
+import { assemblyBlocker } from '../stores/assemblyStore';
 import { averageThickness, curingInRange, formatDate, layersToTarget, TARGET_TOTAL_MM } from '../utils/layer';
 import { MIX_RATIOS, type LacquerLayer } from '../types/lacquer-layer';
 
@@ -23,6 +24,8 @@ watch(guqinOptions, (list) => {
 const layers = computed(() => (selectedGuqin.value ? lacquerStore.layersOf(selectedGuqin.value) : []));
 const total = computed(() => (selectedGuqin.value ? lacquerStore.totalOf(selectedGuqin.value) : 0));
 const abnormal = computed(() => layers.value.filter((layer) => !curingInRange(layer.curingTemp, layer.curingHumidity)).length);
+const gateMessage = computed(() => (selectedGuqin.value ? assemblyBlocker(selectedGuqin.value) ?? '合琴养护已放行，可以开始髹漆' : '请选择琴号'));
+const canAppend = computed(() => Boolean(selectedGuqin.value && !assemblyBlocker(selectedGuqin.value)));
 
 const dialogVisible = ref(false);
 const editingId = ref('');
@@ -58,6 +61,10 @@ const rules: FormRules = {
 };
 
 function openAppend() {
+  if (!canAppend.value) {
+    ElMessage.warning(gateMessage.value);
+    return;
+  }
   editingId.value = '';
   form.value = {
     guqinNo: selectedGuqin.value || guqinOptions.value[0] || 'Q-2501',
@@ -107,7 +114,11 @@ async function submit() {
     await lacquerStore.updateLayer(editingId.value, payload);
     ElMessage.success('已更新该遍记录并重算累计厚度');
   } else {
-    const created = await lacquerStore.appendLayer(payload);
+    const created = await lacquerStore.appendLayer(payload).catch((error: Error) => {
+      ElMessage.error(error.message);
+      return undefined;
+    });
+    if (!created) return;
     selectedGuqin.value = created.guqinNo;
     ElMessage.success(`已追加第 ${created.seq} 遍，累计厚度 ${created.totalThickness.toFixed(2)}mm`);
   }
@@ -127,15 +138,24 @@ async function remove(layer: LacquerLayer) {
 <template>
   <div>
     <h2 class="page-title">灰胎髹漆遍次台账</h2>
-    <p class="page-desc">按遍次累加灰胎厚度，记录荫房温湿度与打磨目数；工艺窗口为 20~30℃ / 70~85%。</p>
+    <p class="page-desc">合琴记录齐备且湿压养护满 3 天后才能追加灰胎；按遍次累加厚度，记录荫房温湿度与打磨目数；工艺窗口为 20~30℃ / 70~85%。</p>
 
     <div class="toolbar">
-      <el-button type="primary" @click="openAppend">追加髹漆遍次</el-button>
+      <el-button type="primary" :disabled="!canAppend" @click="openAppend">追加髹漆遍次</el-button>
       <el-select v-model="selectedGuqin" placeholder="选择琴号" style="width: 180px">
         <el-option v-for="no in guqinOptions" :key="no" :label="no" :value="no" />
       </el-select>
       <el-tag type="warning" effect="plain">髹漆目标累计 {{ TARGET_TOTAL_MM }}mm</el-tag>
     </div>
+
+    <el-alert
+      v-if="selectedGuqin"
+      :title="canAppend ? '合琴养护已放行，可以开始髹漆' : gateMessage"
+      :type="canAppend ? 'success' : 'warning'"
+      :closable="false"
+      class="gate-alert"
+      show-icon
+    />
 
     <el-row :gutter="12" class="stat-row">
       <el-col :xs="12" :md="6">
@@ -256,6 +276,9 @@ async function remove(layer: LacquerLayer) {
   flex-wrap: wrap;
 }
 .stat-row {
+  margin-bottom: 12px;
+}
+.gate-alert {
   margin-bottom: 12px;
 }
 .stat-row .el-col {

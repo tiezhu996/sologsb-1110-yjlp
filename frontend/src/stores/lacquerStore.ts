@@ -3,6 +3,7 @@ import { db } from '../utils/db';
 import { uid } from '../utils/id';
 import { toPlain } from '../utils/plain';
 import { cumulativeThickness, nextSeq, sortLayers } from '../utils/layer';
+import { assemblyBlocker } from './assemblyStore';
 import type { LacquerLayer } from '../types/lacquer-layer';
 
 export interface LacquerInput {
@@ -51,6 +52,10 @@ export const useLacquerStore = defineStore('lacquer', {
 
     /** 追加一遍：遍次自动 +1，并重算该琴累计厚度 */
     async appendLayer(input: LacquerInput): Promise<LacquerLayer> {
+      const blocker = assemblyBlocker(input.guqinNo.trim());
+      if (blocker) {
+        throw new Error(blocker);
+      }
       const siblings = this.layers.filter((l) => l.guqinNo === input.guqinNo);
       const layer: LacquerLayer = {
         id: uid('layer'),
